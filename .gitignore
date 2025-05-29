@@ -1,0 +1,51 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+node_modules/*
+# 依赖目录
+my-vue-app/node_modules/*
+
+# 构建输出
+my-vue-app/dist/*
+**/*/dist/*
+
+# 本地环境变量
+.env.local
+.env.*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 系统文件
+Thumbs.db
+
+# 测试相关
+coverage/
+.nyc_output/
+
+# 缓存目录
+.cache/
+
+# 包管理器文件
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 本地调试文件
+debug.log
+
+# Vue CLI生成文件
+jsconfig.json
