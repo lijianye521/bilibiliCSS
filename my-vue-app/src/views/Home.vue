@@ -1,6 +1,7 @@
 <script setup>
 import StockChart from '@/components/StockChart.vue'
 import { ref, onMounted } from 'vue'
+import { getRealTimeData } from '@/services/api'
 
 // 表格列定义
 const columns = [
@@ -39,15 +40,17 @@ const currentStock = ref({
 const initializeData = async () => {
   try {
     // 获取第一支股票的实时数据
-    const realtimeResponse = await fetch('/api/realtime?codes=513180.SH&fields=rt_last,rt_pct_chg')
-    const realtimeData = await realtimeResponse.json()
+    const realtimeData = await getRealTimeData('513180.SH')
     
-    if (realtimeData.success) {
+    if (realtimeData.success && realtimeData.data?.fields) {
+      const lastPrice = realtimeData.data.fields.RT_LAST?.[0] ?? currentStock.value.price
+      const pctChange = realtimeData.data.fields.RT_PCT_CHG?.[0] ?? currentStock.value.change
+
       // 更新当前股票信息
       currentStock.value = {
         code: '513180.SH',
-        price: realtimeData.data.fields.RT_LAST[0],
-        change: realtimeData.data.fields.RT_PCT_CHG[0]
+        price: lastPrice,
+        change: pctChange
       }
       
       // 更新表格中的数据
@@ -55,8 +58,8 @@ const initializeData = async () => {
         if (item.code === '513180.SH') {
           return {
             ...item,
-            price: realtimeData.data.fields.RT_LAST[0],
-            change: realtimeData.data.fields.RT_PCT_CHG[0]
+            price: lastPrice,
+            change: pctChange
           }
         }
         return item
@@ -101,24 +104,11 @@ onMounted(() => {
       </a-col>
       <a-col :xs="24" :sm="24" :md="14" :lg="16">
         <a-card :bordered="false" class="chart-card">
-          <StockChart />
+          <StockChart ref="stockChart" />
         </a-card>
       </a-col>
     </a-row>
-    <a-card title="交易列表" :bordered="false" class="trade-list-card">
-      <a-table 
-        :columns="columns" 
-        :data-source="stockData" 
-        :pagination="false"
-        :scroll="{ x: 'max-content' }"
-      >
-        <template #bodyCell="{ column, text }">
-          <span :style="{ color: text > 0 ? '#3f8600' : '#cf1322' }" v-if="column.dataIndex === 'change'">
-            {{ text }}%
-          </span>
-        </template>
-      </a-table>
-    </a-card>
+
   </div>
 </template>
 

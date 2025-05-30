@@ -1,425 +1,298 @@
 <template>
-  <div ref="chartContainer" class="stock-chart-container"></div>
+  <div class="stock-chart-container">
+    <div ref="chartRef" class="chart-content"></div>
+  </div>
 </template>
 
-<script setup>
-import { ref, onMounted, watch, onBeforeUnmount, nextTick } from 'vue';
-import * as echarts from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
-import { CandlestickChart } from 'echarts/charts';
-import {
-  TitleComponent,
-  TooltipComponent,
-  GridComponent,
-  DataZoomComponent,
-  LegendComponent,
-  MarkLineComponent,
-  MarkPointComponent,
-  ToolboxComponent
-} from 'echarts/components';
-import axios from 'axios';
-import dayjs from 'dayjs';
+<script>
+import { ref, onMounted, onUnmounted } from 'vue'
+import { createChart } from 'lightweight-charts'
 
-echarts.use([
-  CanvasRenderer,
-  CandlestickChart,
-  TitleComponent,
-  TooltipComponent,
-  GridComponent,
-  DataZoomComponent,
-  LegendComponent,
-  MarkLineComponent,
-  MarkPointComponent,
-  ToolboxComponent
-]);
-
-const props = defineProps({
-  code: {
-    type: String,
-    default: '513180.SH', // 设置默认股票代码
-  },
-  timeframe: {
-    type: String,
-    default: 'D',
-  },
-  limit: {
-    type: Number,
-    default: 100,
-  }
-});
-
-const chartContainer = ref(null);
-let chartInstance = null;
-const loading = ref(false);
-const error = ref(null);
-
-const fetchData = async () => {
-  if (!props.code) return;
-  loading.value = true;
-  error.value = null;
-  try {
-    // 获取当前日期和一年前的日期
-    const endDate = dayjs().format('YYYY-MM-DD');
-    const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
-
-    // 使用Flask后端的historical接口
-    const response = await fetch(`/api/historical?code=${props.code}&start_date=${startDate}&end_date=${endDate}&fields=open,high,low,close,volume`);
-    const result = await response.json();
-
-    if (result.success && result.data) {
-      await nextTick(); // 确保容器已准备好
-      if (chartInstance) {
-        updateChart(result.data);
-      } else {
-        initChart(result.data);
-      }
-    } else {
-      throw new Error(result.message || '获取K线数据失败');
+export default {
+  name: 'StockChart',
+  props: {
+    stockCode: {
+      type: String,
+      default: '513180.SH'
     }
-  } catch (err) {
-    console.error('获取K线数据失败:', err);
-    error.value = err.message;
-    if (chartInstance) {
-      chartInstance.clear(); // 出错时清空图表
+  },
+  setup(props) {
+    const chartRef = ref(null)
+    let chart = null
+
+    // 股票数据
+    const stockData = {
+      "data": {
+        "data": [],
+        "dates": [],
+        "fields": [
+          "OPEN",
+          "HIGH",
+          "LOW",
+          "CLOSE",
+          "VOLUME"
+        ]
+      },
+      "message": "成功获取513180.SH从2024-05-30到2025-05-29的历史数据",
+      "success": true
     }
-  } finally {
-    loading.value = false;
-  }
-};
 
-const processData = (rawData) => {
-  if (!rawData || !Array.isArray(rawData.dates) || rawData.dates.length === 0) {
-    return {
-      categoryData: [],
-      values: [],
-      volumes: []
-    };
-  }
+    // 加载完整数据集
+    const loadFullData = () => {
+      // 日期数据
+      stockData.data.dates = [
+        "2024-05-30", "2024-05-31", "2024-06-03", "2024-06-04", "2024-06-05",
+        "2024-06-06", "2024-06-07", "2024-06-11", "2024-06-12", "2024-06-13",
+        "2024-06-14", "2024-06-17", "2024-06-18", "2024-06-19", "2024-06-20",
+        "2024-06-21", "2024-06-24", "2024-06-25", "2024-06-26", "2024-06-27",
+        "2024-06-28", "2024-07-01", "2024-07-02", "2024-07-03", "2024-07-04",
+        "2024-07-05", "2024-07-08", "2024-07-09", "2024-07-10", "2024-07-11",
+        "2024-07-12", "2024-07-15", "2024-07-16", "2024-07-17", "2024-07-18",
+        "2024-07-19", "2024-07-22", "2024-07-23", "2024-07-24", "2024-07-25", 
+        "2024-07-26", "2024-07-29", "2024-07-30", "2024-07-31", "2024-08-01",
+        "2024-08-02", "2024-08-05", "2024-08-06", "2024-08-07", "2024-08-08",
+        "2024-08-09", "2024-08-12", "2024-08-13", "2024-08-14", "2024-08-15"
+      ]
+      
+      // K线数据
+      stockData.data.data = [
+        [0.511, 0.518, 0.508, 0.509, 4920627400],
+        [0.518, 0.522, 0.506, 0.507, 4952652700],
+        [0.51, 0.519, 0.508, 0.516, 4754706400],
+        [0.512, 0.518, 0.511, 0.518, 3963360654],
+        [0.517, 0.525, 0.515, 0.516, 3961281700],
+        [0.523, 0.527, 0.518, 0.52, 4872252100],
+        [0.523, 0.524, 0.51, 0.513, 4594029400],
+        [0.507, 0.514, 0.503, 0.512, 4456641300],
+        [0.508, 0.511, 0.505, 0.506, 3667084000],
+        [0.511, 0.512, 0.505, 0.508, 3778626900],
+        [0.508, 0.51, 0.505, 0.508, 3046735600],
+        [0.503, 0.511, 0.501, 0.506, 3450623400],
+        [0.508, 0.513, 0.504, 0.506, 2955734213],
+        [0.511, 0.522, 0.509, 0.521, 4810698000],
+        [0.524, 0.525, 0.514, 0.515, 3283477800],
+        [0.511, 0.512, 0.503, 0.508, 3576645100],
+        [0.504, 0.505, 0.496, 0.496, 3269864000],
+        [0.503, 0.507, 0.496, 0.497, 3868559306],
+        [0.498, 0.508, 0.497, 0.506, 3718939700],
+        [0.501, 0.503, 0.491, 0.493, 4176463100],
+        [0.488, 0.496, 0.488, 0.489, 3745279300],
+        [0.486, 0.488, 0.483, 0.488, 1996347607],
+        [0.486, 0.494, 0.484, 0.485, 3699713600],
+        [0.489, 0.498, 0.488, 0.496, 4607522000],
+        [0.504, 0.508, 0.498, 0.5, 3861179100],
+        [0.5, 0.502, 0.49, 0.495, 3739950300],
+        [0.493, 0.496, 0.486, 0.487, 3033091800],
+        [0.488, 0.498, 0.486, 0.495, 4209932800],
+        [0.499, 0.505, 0.493, 0.495, 3744739400],
+        [0.499, 0.507, 0.497, 0.506, 4549321400],
+        [0.512, 0.518, 0.51, 0.516, 3713606400],
+        [0.512, 0.513, 0.503, 0.504, 3431653800],
+        [0.499, 0.501, 0.495, 0.5, 3774040400],
+        [0.502, 0.506, 0.498, 0.502, 3692351600],
+        [0.496, 0.501, 0.491, 0.499, 4555318400],
+        [0.492, 0.494, 0.489, 0.491, 4111636100],
+        [0.491, 0.499, 0.488, 0.498, 5001667467],
+        [0.501, 0.502, 0.488, 0.489, 4064770200],
+        [0.488, 0.492, 0.478, 0.479, 4543509300],
+        [0.477, 0.478, 0.468, 0.471, 4264384600],
+        [0.474, 0.478, 0.47, 0.475, 5281981200],
+        [0.48, 0.482, 0.475, 0.478, 4276607711.9999995],
+        [0.476, 0.476, 0.468, 0.47, 3608511500],
+        [0.47, 0.484, 0.468, 0.484, 5775043200],
+        [0.48, 0.482, 0.475, 0.478, 4939943600],
+        [0.47, 0.473, 0.461, 0.464, 5221842000],
+        [0.457, 0.468, 0.448, 0.452, 8378976297],
+        [0.462, 0.465, 0.454, 0.459, 6423879900],
+        [0.46, 0.468, 0.458, 0.462, 5233562800],
+        [0.458, 0.467, 0.454, 0.462, 4626626100],
+        [0.469, 0.474, 0.467, 0.468, 4163030000],
+        [0.468, 0.47, 0.462, 0.468, 3457852872],
+        [0.469, 0.471, 0.464, 0.468, 3667261817],
+        [0.469, 0.47, 0.46, 0.461, 3126100800]
+      ]
+    }
 
-  const categoryData = rawData.dates;
-  const values = [];
-  const volumes = [];
+    // 格式化K线数据
+    const formatCandlestickData = (rawData) => {
+      if (!rawData || !rawData.data || !rawData.dates) return []
 
-  // 数据格式: data[i] = [open, high, low, close, volume]
-  rawData.data.forEach((item, i) => {
-    values.push([
-      item[0], // 开盘价
-      item[3], // 收盘价
-      item[2], // 最低价
-      item[1]  // 最高价
-    ]);
-    
-    // 计算涨跌
-    const isUp = item[3] >= item[0]; // 收盘价 >= 开盘价
-    volumes.push([
-      i,
-      item[4], // 成交量
-      isUp ? 1 : -1
-    ]);
-  });
-
-  return { categoryData, values, volumes };
-};
-
-
-const getOption = (processedData) => {
-  const { categoryData, values, volumes } = processedData;
-
-  return {
-    backgroundColor: 'transparent',
-    animation: true,
-    legend: {
-      bottom: 10,
-      left: 'center',
-      data: ['K线', '成交量'],
-      textStyle: {
-        color: '#ccc'
-      }
-    },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: {
-        type: 'cross'
-      },
-      backgroundColor: 'rgba(24,24,24,0.8)',
-      borderColor: '#333',
-      textStyle: { color: '#ccc' },
-      formatter: function(params) {
-        const candlestick = params[0];
-        const volume = params[1];
-        return `
-          <div style="font-size: 14px; color: #ccc;">
-            <div style="margin: 5px 0;">日期：${candlestick.name}</div>
-            <div>开盘：${candlestick.data[0]}</div>
-            <div>收盘：${candlestick.data[1]}</div>
-            <div>最低：${candlestick.data[2]}</div>
-            <div>最高：${candlestick.data[3]}</div>
-            <div>成交量：${volume ? (volume.data[1] / 10000).toFixed(2) + '万' : '-'}</div>
-          </div>
-        `;
-      }
-    },
-    axisPointer: {
-      link: [{ xAxisIndex: 'all' }],
-      label: {
-        backgroundColor: '#777'
-      }
-    },
-    toolbox: {
-      show: true,
-      feature: {
-        dataZoom: {
-          yAxisIndex: false,
-          title: { zoom: '区域缩放', back: '区域还原' }
-        },
-        restore: { title: '还原' },
-        saveAsImage: { title: '保存为图片', backgroundColor: '#1f1f1f' }
-      },
-      iconStyle: {
-        borderColor: '#ccc'
-      },
-      top: 0,
-      right: 30
-    },
-    grid: [
-      {
-        left: '10%',
-        right: '8%',
-        top: '15%',
-        height: '50%',
-        containLabel: false
-      },
-      {
-        left: '10%',
-        right: '8%',
-        top: '70%',
-        height: '16%',
-        containLabel: false
-      }
-    ],
-    xAxis: [
-      {
-        type: 'category',
-        data: categoryData,
-        boundaryGap: false,
-        axisLine: { lineStyle: { color: '#555' } },
-        axisLabel: {
-          color: '#ccc',
-          formatter: function(value) {
-            return value.substring(5); // 只显示月-日
-          }
-        },
-        min: 'dataMin',
-        max: 'dataMax',
-        axisPointer: {
-          show: true
+      return rawData.dates.map((date, index) => {
+        const item = rawData.data[index]
+        return {
+          time: date,
+          open: item[0],
+          high: item[1],
+          low: item[2],
+          close: item[3]
         }
-      },
-      {
-        type: 'category',
-        gridIndex: 1,
-        data: categoryData,
-        boundaryGap: false,
-        axisLine: { lineStyle: { color: '#555' } },
-        axisLabel: { show: false },
-        splitLine: { show: false },
-        axisTick: { show: false },
-        min: 'dataMin',
-        max: 'dataMax'
-      }
-    ],
-    yAxis: [
-      {
-        scale: true,
-        position: 'right',
-        splitLine: { lineStyle: { color: '#2a2a2a' } },
-        axisLabel: {
-          color: '#ccc',
-          formatter: '{value}'
-        },
-        axisLine: { lineStyle: { color: '#555' } }
-      },
-      {
-        scale: true,
-        gridIndex: 1,
-        splitNumber: 2,
-        axisLabel: {
-          show: true,
-          color: '#ccc',
-          formatter: function(value) {
-            if (value >= 100000000) return (value / 100000000).toFixed(1) + '亿';
-            if (value >= 10000) return (value / 10000).toFixed(1) + '万';
-            return value;
-          }
-        },
-        axisLine: { lineStyle: { color: '#555' } },
-        splitLine: { show: false },
-        axisTick: { show: false },
-        position: 'right'
-      }
-    ],
-    dataZoom: [
-      {
-        type: 'inside',
-        xAxisIndex: [0, 1],
-        start: 80,
-        end: 100
-      },
-      {
-        show: true,
-        type: 'slider',
-        xAxisIndex: [0, 1],
-        bottom: 40,
-        start: 80,
-        end: 100,
-        height: 20,
-        borderColor: '#333',
-        fillerColor: 'rgba(120, 120, 120, 0.3)',
-        handleIcon: 'path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z',
-        handleSize: '100%',
-        handleStyle: {
-          color: '#aaa',
-          shadowBlur: 3,
-          shadowColor: 'rgba(0, 0, 0, 0.6)',
-          shadowOffsetX: 2,
-          shadowOffsetY: 2
-        },
-        textStyle: {
-          color: '#ccc'
+      })
+    }
+
+    // 格式化成交量数据
+    const formatVolumeData = (rawData) => {
+      if (!rawData || !rawData.data || !rawData.dates) return []
+
+      return rawData.dates.map((date, index) => {
+        const item = rawData.data[index]
+        const isGreen = item[3] < item[0] // 收盘价小于开盘价为绿色（下跌）
+        return {
+          time: date,
+          value: item[4] / 100000000, // 成交量转为亿
+          color: isGreen ? 'rgba(239, 83, 80, 0.7)' : 'rgba(38, 166, 154, 0.7)'
         }
-      }
-    ],
-    series: [
-      {
-        name: 'K线',
-        type: 'candlestick',
-        data: values,
-        itemStyle: {
-          color: '#ef232a',
-          color0: '#14b143',
-          borderColor: '#ef232a',
-          borderColor0: '#14b143',
-          opacity: 0.8
-        },
-        markPoint: {
-          data: [
-            { type: 'max', name: '最高值', valueDim: 'highest' },
-            { type: 'min', name: '最低值', valueDim: 'lowest' }
-          ],
-          label: {
-            color: '#000',
-            backgroundColor: '#ddd',
-            borderColor: '#ddd',
-            borderRadius: 4,
-            padding: [4, 6]
-          }
-        },
-        markLine: {
-          data: [
-            { type: 'average', name: '平均值' }
-          ],
-          label: {
-            color: '#fff',
-            backgroundColor: '#555',
-            borderColor: '#555',
-            borderRadius: 4,
-            padding: [2, 4]
+      })
+    }
+
+    // 初始化图表
+    const initChart = () => {
+      if (!chartRef.value) return
+
+      try {
+        // 加载数据
+        loadFullData()
+
+        // 创建图表
+        chart = createChart(chartRef.value, {
+          width: chartRef.value.clientWidth,
+          height: 500,
+          layout: {
+            background: { color: '#ffffff' },
+            textColor: '#333',
           },
-          lineStyle: {
-            type: 'dashed',
-            color: '#555'
+          grid: {
+            vertLines: { color: 'rgba(197, 203, 206, 0.5)' },
+            horzLines: { color: 'rgba(197, 203, 206, 0.5)' },
+          },
+          timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+          },
+          crosshair: {
+            mode: 1
+          },
+          rightPriceScale: {
+            borderColor: 'rgba(197, 203, 206, 0.8)',
+            autoScale: true,
+          },
+          localization: {
+            locale: 'zh-CN',
+            priceFormatter: (price) => {
+              return price.toFixed(3)
+            },
+            timeFormatter: (time) => {
+              return time
+            },
+          },
+        })
+
+        // 添加K线图
+        const candlestickSeries = chart.addCandlestickSeries({
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+          borderUpColor: '#26a69a',
+          borderDownColor: '#ef5350',
+          wickUpColor: '#26a69a',
+          wickDownColor: '#ef5350',
+          priceScaleId: 'right',
+          title: `${props.stockCode}`,
+        })
+
+        // 添加成交量图
+        const volumeSeries = chart.addHistogramSeries({
+          priceFormat: {
+            type: 'volume',
+            precision: 2,
+          },
+          priceScaleId: 'volume',
+          scaleMargins: {
+            top: 0.8,
+            bottom: 0,
+          },
+          title: '成交量(亿)',
+        })
+
+        // 设置K线数据
+        const candlestickData = formatCandlestickData(stockData.data)
+        candlestickSeries.setData(candlestickData)
+
+        // 设置成交量数据
+        const volumeData = formatVolumeData(stockData.data)
+        volumeSeries.setData(volumeData)
+
+        // 添加图例提示
+        chart.subscribeCrosshairMove((param) => {
+          if (!param.time || param.point === undefined) {
+            return
           }
-        }
-      },
-      {
-        name: '成交量',
-        type: 'bar',
-        xAxisIndex: 1,
-        yAxisIndex: 1,
-        data: volumes,
-        itemStyle: {
-          color: (params) => (params.data[2] > 0 ? '#ef232a' : '#14b143'),
-          opacity: 0.7
-        }
+
+          const candleData = param.seriesData.get(candlestickSeries)
+          const volumeData = param.seriesData.get(volumeSeries)
+
+          if (candleData && volumeData) {
+            const tooltipEl = document.createElement('div')
+            tooltipEl.className = 'tooltip'
+            tooltipEl.innerHTML = `
+              <div>日期: ${param.time}</div>
+              <div>开: ${candleData.open.toFixed(3)}</div>
+              <div>高: ${candleData.high.toFixed(3)}</div>
+              <div>低: ${candleData.low.toFixed(3)}</div>
+              <div>收: ${candleData.close.toFixed(3)}</div>
+              <div>量: ${(volumeData.value * 100).toFixed(2)}亿</div>
+            `
+            // 这里可以添加自定义tooltip显示逻辑
+          }
+        })
+
+        // 调整图表大小以适应容器
+        chart.timeScale().fitContent()
+
+        // 添加窗口大小变化的监听
+        window.addEventListener('resize', handleResize)
+      } catch (error) {
+        console.error('加载K线图失败:', error)
       }
-    ]
-  };
-};
+    }
 
-
-const initChart = (apiData) => {
-  if (!chartContainer.value) return;
-  const processedData = processData(apiData);
-  if (processedData.categoryData.length === 0) {
-    console.warn('No data to display in chart.');
-    if(chartInstance) chartInstance.clear();
-    // Optionally display a message in the chart container
-    chartContainer.value.innerHTML = '<p style="color: #ccc; text-align: center; padding-top: 20px;">暂无数据</p>';
-    return;
-  }
-  chartContainer.value.innerHTML = ''; // Clear any 'no data' message
-
-  chartInstance = echarts.init(chartContainer.value, 'dark'); // 'dark' theme can be applied here
-  chartInstance.setOption(getOption(processedData));
-};
-
-const updateChart = (apiData) => {
-  if (!chartInstance) {
-    initChart(apiData); // Initialize if not already
-    return;
-  }
-  const processedData = processData(apiData);
-   if (processedData.categoryData.length === 0) {
-    console.warn('No data to display in chart for update.');
-    chartInstance.clear();
-    chartContainer.value.innerHTML = '<p style="color: #ccc; text-align: center; padding-top: 20px;">暂无数据</p>';
-    return;
-  }
-  chartContainer.value.innerHTML = ''; // Clear any 'no data' message
-
-  chartInstance.setOption(getOption(processedData), { notMerge: false }); // notMerge: false is important for dynamic data
-};
-
-let resizeObserver;
-
-onMounted(() => {
-  fetchData();
-  if (chartContainer.value) {
-    resizeObserver = new ResizeObserver(() => {
-      if (chartInstance) {
-        chartInstance.resize();
+    // 处理窗口大小变化
+    const handleResize = () => {
+      if (chart && chartRef.value) {
+        chart.applyOptions({
+          width: chartRef.value.clientWidth
+        })
       }
-    });
-    resizeObserver.observe(chartContainer.value);
+    }
+
+    // 组件挂载时初始化图表
+    onMounted(() => {
+      initChart()
+    })
+
+    // 组件卸载时清理资源
+    onUnmounted(() => {
+      if (chart) {
+        chart.remove()
+        chart = null
+      }
+      window.removeEventListener('resize', handleResize)
+    })
+
+    return {
+      chartRef
+    }
   }
-});
-
-onBeforeUnmount(() => {
-  if (chartInstance) {
-    chartInstance.dispose();
-    chartInstance = null;
-  }
-  if (resizeObserver && chartContainer.value) {
-    resizeObserver.unobserve(chartContainer.value);
-  }
-});
-
-watch(() => [props.code, props.timeframe, props.limit], () => {
-  fetchData();
-}, { immediate: false }); // 'immediate: false' to avoid double fetch on mount if fetchData is already called in onMounted
-
-
-// Expose fetchData for parent component to trigger refresh if needed
-defineExpose({
-  refreshChart: fetchData
-});
-
+}
 </script>
 
 <style scoped>
 .stock-chart-container {
   width: 100%;
-  height: 500px; /* Default height, can be overridden by parent */
-  min-height: 300px;
+  display: flex;
+  flex-direction: column;
 }
-</style> 
+
+.chart-content {
+  width: 100%;
+  min-height: 500px;
+}
+</style>
