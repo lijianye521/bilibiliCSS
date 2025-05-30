@@ -1,5 +1,14 @@
 import { createApp } from 'vue'
-import './style.css'
 import App from './App.vue'
+import router from './router'
+import Antd from 'ant-design-vue'
+import { ConfigProvider } from 'ant-design-vue'
+import { darkTheme } from './theme/dark-theme'
+import 'ant-design-vue/dist/reset.css'
+import './style.css'
 
-createApp(App).mount('#app')
+const app = createApp(App)
+app.use(router)
+app.use(Antd)
+app.component('a-config-provider', ConfigProvider)
+app.mount('#app')
