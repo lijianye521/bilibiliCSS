@@ -13,7 +13,7 @@ const router = useRouter()
       <a-layout-header class="header">
         <div class="header-content">
           <div class="logo-section">
-            <div class="logo">股票行情系统</div>
+            <div class="logo">股票行情分析系统</div>
           </div>
           <div class="nav-section">
             <a-menu

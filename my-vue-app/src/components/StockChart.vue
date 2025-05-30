@@ -18,6 +18,7 @@ import {
   ToolboxComponent
 } from 'echarts/components';
 import axios from 'axios';
+import dayjs from 'dayjs';
 
 echarts.use([
   CanvasRenderer,
@@ -35,11 +36,11 @@ echarts.use([
 const props = defineProps({
   code: {
     type: String,
-    required: true,
+    default: '513180.SH', // 设置默认股票代码
   },
   timeframe: {
     type: String,
-    default: 'D', // D for daily, W for weekly, M for monthly, or minute intervals like '60'
+    default: 'D',
   },
   limit: {
     type: Number,
@@ -57,29 +58,29 @@ const fetchData = async () => {
   loading.value = true;
   error.value = null;
   try {
-    const response = await axios.get('/api/stock/kline', {
-      params: {
-        code: props.code,
-        timeframe: props.timeframe,
-        limit: props.limit,
-      },
-    });
+    // 获取当前日期和一年前的日期
+    const endDate = dayjs().format('YYYY-MM-DD');
+    const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
 
-    if (response.data.success && response.data.data) {
-      await nextTick(); // Ensure the container is ready
+    // 使用Flask后端的historical接口
+    const response = await fetch(`/api/historical?code=${props.code}&start_date=${startDate}&end_date=${endDate}&fields=open,high,low,close,volume`);
+    const result = await response.json();
+
+    if (result.success && result.data) {
+      await nextTick(); // 确保容器已准备好
       if (chartInstance) {
-        updateChart(response.data.data);
+        updateChart(result.data);
       } else {
-        initChart(response.data.data);
+        initChart(result.data);
       }
     } else {
-      throw new Error(response.data.message || 'Failed to fetch K-line data');
+      throw new Error(result.message || '获取K线数据失败');
     }
   } catch (err) {
-    console.error('Error fetching K-line data:', err);
+    console.error('获取K线数据失败:', err);
     error.value = err.message;
     if (chartInstance) {
-      chartInstance.clear(); // Clear chart on error
+      chartInstance.clear(); // 出错时清空图表
     }
   } finally {
     loading.value = false;
@@ -87,32 +88,36 @@ const fetchData = async () => {
 };
 
 const processData = (rawData) => {
-  if (!rawData || !Array.isArray(rawData.times) || rawData.times.length === 0) {
+  if (!rawData || !Array.isArray(rawData.dates) || rawData.dates.length === 0) {
     return {
       categoryData: [],
       values: [],
-      volumes: [],
+      volumes: []
     };
   }
 
-  const categoryData = rawData.times.map(timeStr => {
-    // Assuming timeStr is like "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS"
-    // ECharts can parse this directly, but ensure format consistency with API
-    return timeStr.split(' ')[0]; // Use only date part for daily/weekly/monthly for simplicity
-  });
-
+  const categoryData = rawData.dates;
   const values = [];
   const volumes = [];
 
-  for (let i = 0; i < rawData.times.length; i++) {
+  // 数据格式: data[i] = [open, high, low, close, volume]
+  rawData.data.forEach((item, i) => {
     values.push([
-      rawData.fields.OPEN[i],
-      rawData.fields.CLOSE[i],
-      rawData.fields.LOW[i],
-      rawData.fields.HIGH[i],
+      item[0], // 开盘价
+      item[3], // 收盘价
+      item[2], // 最低价
+      item[1]  // 最高价
     ]);
-    volumes.push([i, rawData.fields.VOLUME[i], rawData.fields.CLOSE[i] > rawData.fields.OPEN[i] ? 1 : -1]);
-  }
+    
+    // 计算涨跌
+    const isUp = item[3] >= item[0]; // 收盘价 >= 开盘价
+    volumes.push([
+      i,
+      item[4], // 成交量
+      isUp ? 1 : -1
+    ]);
+  });
+
   return { categoryData, values, volumes };
 };
 
@@ -126,7 +131,7 @@ const getOption = (processedData) => {
     legend: {
       bottom: 10,
       left: 'center',
-      data: ['K-Line', 'Volume'],
+      data: ['K线', '成交量'],
       textStyle: {
         color: '#ccc'
       }
@@ -134,15 +139,24 @@ const getOption = (processedData) => {
     tooltip: {
       trigger: 'axis',
       axisPointer: {
-        type: 'cross',
+        type: 'cross'
       },
       backgroundColor: 'rgba(24,24,24,0.8)',
       borderColor: '#333',
       textStyle: { color: '#ccc' },
-      position: function (pos, params, el, elRect, size) {
-        const obj = { top: 10 };
-        obj[['left', 'right'][+(pos[0] < size.viewSize[0] / 2)]] = 30;
-        return obj;
+      formatter: function(params) {
+        const candlestick = params[0];
+        const volume = params[1];
+        return `
+          <div style="font-size: 14px; color: #ccc;">
+            <div style="margin: 5px 0;">日期：${candlestick.name}</div>
+            <div>开盘：${candlestick.data[0]}</div>
+            <div>收盘：${candlestick.data[1]}</div>
+            <div>最低：${candlestick.data[2]}</div>
+            <div>最高：${candlestick.data[3]}</div>
+            <div>成交量：${volume ? (volume.data[1] / 10000).toFixed(2) + '万' : '-'}</div>
+          </div>
+        `;
       }
     },
     axisPointer: {
@@ -156,26 +170,26 @@ const getOption = (processedData) => {
       feature: {
         dataZoom: {
           yAxisIndex: false,
-          title: { zoom: 'Area Zoom', back: 'Restore Area Zoom' }
+          title: { zoom: '区域缩放', back: '区域还原' }
         },
-        restore: { title: 'Restore' },
-        saveAsImage: { title: 'Save as Image', backgroundColor: '#1f1f1f' }
+        restore: { title: '还原' },
+        saveAsImage: { title: '保存为图片', backgroundColor: '#1f1f1f' }
       },
       iconStyle: {
         borderColor: '#ccc'
       },
       top: 0,
-      right: 30,
+      right: 30
     },
     grid: [
-      { // K-line chart
+      {
         left: '10%',
         right: '8%',
         top: '15%',
         height: '50%',
         containLabel: false
       },
-      { // Volume chart
+      {
         left: '10%',
         right: '8%',
         top: '70%',
@@ -189,7 +203,12 @@ const getOption = (processedData) => {
         data: categoryData,
         boundaryGap: false,
         axisLine: { lineStyle: { color: '#555' } },
-        axisLabel: { color: '#ccc' },
+        axisLabel: {
+          color: '#ccc',
+          formatter: function(value) {
+            return value.substring(5); // 只显示月-日
+          }
+        },
         min: 'dataMin',
         max: 'dataMax',
         axisPointer: {
@@ -202,28 +221,32 @@ const getOption = (processedData) => {
         data: categoryData,
         boundaryGap: false,
         axisLine: { lineStyle: { color: '#555' } },
+        axisLabel: { show: false },
         splitLine: { show: false },
         axisTick: { show: false },
-        axisLabel: { show: false },
         min: 'dataMin',
-        max: 'dataMax',
+        max: 'dataMax'
       }
     ],
     yAxis: [
       {
         scale: true,
-        axisLine: { lineStyle: { color: '#555' } },
+        position: 'right',
         splitLine: { lineStyle: { color: '#2a2a2a' } },
-        axisLabel: { color: '#ccc', formatter: '{value}' }
+        axisLabel: {
+          color: '#ccc',
+          formatter: '{value}'
+        },
+        axisLine: { lineStyle: { color: '#555' } }
       },
       {
         scale: true,
         gridIndex: 1,
         splitNumber: 2,
-        axisLabel: { 
+        axisLabel: {
           show: true,
           color: '#ccc',
-          formatter: function (value) {
+          formatter: function(value) {
             if (value >= 100000000) return (value / 100000000).toFixed(1) + '亿';
             if (value >= 10000) return (value / 10000).toFixed(1) + '万';
             return value;
@@ -232,13 +255,14 @@ const getOption = (processedData) => {
         axisLine: { lineStyle: { color: '#555' } },
         splitLine: { show: false },
         axisTick: { show: false },
+        position: 'right'
       }
     ],
     dataZoom: [
       {
         type: 'inside',
         xAxisIndex: [0, 1],
-        start: 70,
+        start: 80,
         end: 100
       },
       {
@@ -246,7 +270,7 @@ const getOption = (processedData) => {
         type: 'slider',
         xAxisIndex: [0, 1],
         bottom: 40,
-        start: 70,
+        start: 80,
         end: 100,
         height: 20,
         borderColor: '#333',
@@ -261,61 +285,60 @@ const getOption = (processedData) => {
           shadowOffsetY: 2
         },
         textStyle: {
-            color: '#ccc'
+          color: '#ccc'
         }
       }
     ],
     series: [
       {
-        name: 'K-Line',
+        name: 'K线',
         type: 'candlestick',
         data: values,
         itemStyle: {
-          color: '#ef232a', // red for up
-          color0: '#14b143', // green for down
+          color: '#ef232a',
+          color0: '#14b143',
           borderColor: '#ef232a',
           borderColor0: '#14b143',
-          opacity: 0.8,
+          opacity: 0.8
         },
         markPoint: {
           data: [
-            { type: 'max', name: 'Max' },
-            { type: 'min', name: 'Min' }
+            { type: 'max', name: '最高值', valueDim: 'highest' },
+            { type: 'min', name: '最低值', valueDim: 'lowest' }
           ],
-          itemStyle: { color: '#ddd'},
           label: {
             color: '#000',
             backgroundColor: '#ddd',
             borderColor: '#ddd',
             borderRadius: 4,
-            padding: [4,6]
+            padding: [4, 6]
           }
         },
         markLine: {
-            data: [
-                { type: 'average', name: 'Avg' }
-            ],
-            label: {
-                color: '#fff',
-                backgroundColor: '#555',
-                borderColor: '#555',
-                borderRadius: 4,
-                padding: [2,4]
-            },
-            lineStyle: {
-                type: 'dashed',
-                color: '#555'
-            }
+          data: [
+            { type: 'average', name: '平均值' }
+          ],
+          label: {
+            color: '#fff',
+            backgroundColor: '#555',
+            borderColor: '#555',
+            borderRadius: 4,
+            padding: [2, 4]
+          },
+          lineStyle: {
+            type: 'dashed',
+            color: '#555'
+          }
         }
       },
       {
-        name: 'Volume',
+        name: '成交量',
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,
-        data: volumes.map(item => [item[0], item[1], item[2]]), // item[2] is 1 for up, -1 for down
+        data: volumes,
         itemStyle: {
-          color: (params) => (params.data[2] > 0 ? '#ef232a' : '#14b143'), // red for up, green for down
+          color: (params) => (params.data[2] > 0 ? '#ef232a' : '#14b143'),
           opacity: 0.7
         }
       }
