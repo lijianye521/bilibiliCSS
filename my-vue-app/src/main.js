@@ -3,7 +3,6 @@ import App from './App.vue'
 import router from './router'
 import Antd from 'ant-design-vue'
 import { ConfigProvider } from 'ant-design-vue'
-import { darkTheme } from './theme/dark-theme'
 import 'ant-design-vue/dist/reset.css'
 import './style.css'
 
