@@ -1,52 +1,43 @@
-<script setup>
+<script>
 import StockChart from '@/components/StockChart.vue'
-import { ref } from 'vue'
 
-const columns = [
-  {
-    title: '代码',
-    dataIndex: 'code',
-    key: 'code',
+export default {
+  components: {
+    StockChart
   },
-  {
-    title: '名称',
-    dataIndex: 'name',
-    key: 'name',
-  },
-  {
-    title: '最新价',
-    dataIndex: 'price',
-    key: 'price',
-  },
-  {
-    title: '涨跌幅',
-    dataIndex: 'change',
-    key: 'change',
-  },
-]
-
-const data = [
-  {
-    key: '1',
-    code: '513180',
-    name: '恒生科技指数ETF',
-    price: 0.716,
-    change: 2.58,
-  },
-  {
-    key: '2',
-    code: '159740',
-    name: '恒生科技30ETF',
-    price: 0.703,
-    change: 2.18,
-  },
-]
+  data() {
+    return {
+      columns: [
+        { title: '代码', dataIndex: 'code', key: 'code' },
+        { title: '名称', dataIndex: 'name', key: 'name' },
+        { title: '最新价', dataIndex: 'price', key: 'price' },
+        { title: '涨跌幅', dataIndex: 'change', key: 'change' }
+      ],
+      data: [
+        {
+          key: '1',
+          code: '513180',
+          name: '恒生科技指数ETF',
+          price: 0.716,
+          change: 2.58
+        },
+        {
+          key: '2',
+          code: '159740',
+          name: '恒生科技30ETF',
+          price: 0.703,
+          change: 2.18
+        }
+      ]
+    }
+  }
+}
 </script>
 
 <template>
   <div class="home">
     <a-row :gutter="[16, 16]" class="full-width">
-      <a-col :xs="24" :sm="24" :md="8" :lg="6">
+      <a-col :xs="24" :sm="24" :md="10" :lg="8">
         <a-card :bordered="false" class="market-overview">
           <template #title>
             <span class="card-title">市场概览</span>
@@ -69,7 +60,7 @@ const data = [
           </div>
         </a-card>
       </a-col>
-      <a-col :xs="24" :sm="24" :md="16" :lg="18">
+      <a-col :xs="24" :sm="24" :md="14" :lg="16">
         <a-card :bordered="false" class="chart-card">
           <StockChart />
         </a-card>
@@ -100,81 +91,35 @@ const data = [
 
 .full-width {
   width: 100%;
-  margin: 0 !important;
+  margin: 0 !important;  /* 移除 a-row 的默认外边距 */
 }
 
-.market-overview {
-  height: 100%;
-}
-
-.statistics-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.chart-card {
-  height: 100%;
-  min-height: 400px;
-}
-
+.market-overview,
+.chart-card,
 .trade-list-card {
-  margin-top: 16px;
+  width: 100%;  /* 确保卡片占满容器宽度 */
 }
 
-:deep(.card-title) {
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 16px;
-  font-weight: 500;
-}
-
-:deep(.ant-statistic-title) {
-  color: rgba(255, 255, 255, 0.45);
-}
-
-:deep(.ant-statistic-content) {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-:deep(.ant-card) {
-  background: #1f1f1f;
-}
-
-:deep(.ant-table) {
-  background: transparent;
-}
-
-:deep(.ant-table-thead > tr > th) {
-  background: #262626;
-  color: rgba(255, 255, 255, 0.85);
-  border-bottom: 1px solid #303030;
-}
-
-:deep(.ant-table-tbody > tr > td) {
-  border-bottom: 1px solid #303030;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-:deep(.ant-table-tbody > tr:hover > td) {
-  background: #262626;
-}
-
+/* 移除 Ant Design 默认的 row 外边距 */
 :deep(.ant-row) {
   margin-right: 0 !important;
   margin-left: 0 !important;
 }
 
-@media (max-width: 768px) {
-  .chart-card {
-    min-height: 300px;
-  }
-  
-  .statistics-wrapper {
-    gap: 12px;
-  }
-  
-  :deep(.ant-card) {
-    margin: 0 -8px;
-  }
+/* 调整卡片内边距 */
+:deep(.ant-card) {
+  margin: 0;
 }
-</style> 
+
+/* 调整表格宽度 */
+:deep(.ant-table-wrapper) {
+  width: 100%;
+}
+
+/* 确保内容区域有合适的内边距 */
+.home {
+  padding: 16px;
+  box-sizing: border-box;
+}
+</style>
+
